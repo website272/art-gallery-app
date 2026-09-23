@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art Gallery</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f9f9f9; color: #333; margin: 0; padding: 40px; }
+        h1 { text-align: center; margin-bottom: 40px; letter-spacing: 2px; text-transform: uppercase; }
+        
+        /* Search and Filter Controls */
+        .controls { max-width: 1200px; margin: 0 auto 30px auto; display: flex; gap: 15px; }
+        .search-bar { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .filter-dropdown { padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; background-color: white; cursor: pointer; }
+
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto; }
+        .art-card { background: white; padding: 20px; border-radius: 4px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); transition: transform 0.2s; position: relative; }
+        .art-card:hover { transform: translateY(-5px); }
+        .image-placeholder { width: 100%; height: 250px; background-color: #e0e0e0; border-radius: 2px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; color: #888; }
+        h3 { margin: 0 0 5px 0; font-size: 1.2rem; }
+        p { margin: 5px 0; color: #666; font-size: 0.9rem; }
+        .price-row { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+        .price { font-weight: bold; color: #000; font-size: 1.1rem; }
+        .buy-btn { background-color: #000; color: #fff; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        .buy-btn:hover { background-color: #333; }
+        .empty-state { grid-column: 1 / -1; text-align: center; color: #888; font-size: 1.2rem; padding: 40px; }
+    </style>
+</head>
+<body>
+    <h1>Featured Collections</h1>
+    
+    <div class="controls">
+        <input type="text" id="searchInput" class="search-bar" placeholder="Search by artwork title or artist name...">
+        <select id="mediumFilter" class="filter-dropdown">
+            <option value="all">All Mediums</option>
+            <!-- Javascript will inject the available mediums here automatically -->
+        </select>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <script>
+        // We store the full inventory globally so we can filter it without re-fetching from the server
+        let allArtworks = [];
+
+        async function loadGallery() {
+            try {
+                const response = await fetch('/api/artworks');
+                allArtworks = await response.json();
+                
+                populateFilters(allArtworks);
+                renderGallery(allArtworks);
+            } catch (error) {
+                console.error("Error loading artwork:", error);
+            }
+        }
+
+        // Extracts all unique mediums from your database and builds the dropdown options
+        function populateFilters(artworks) {
+            const dropdown = document.getElementById('mediumFilter');
+            const uniqueMediums = [...new Set(artworks.map(art => art.medium).filter(Boolean))];
+            
+            dropdown.innerHTML = '<option value="all">All Mediums</option>';
+            uniqueMediums.forEach(medium => {
+                dropdown.innerHTML += `<option value="${medium}">${medium}</option>`;
+            });
+        }
+
+        // Handles displaying the artwork cards
+        function renderGallery(artworksToDisplay) {
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = ''; 
+
+            if (artworksToDisplay.length === 0) {
+                gallery.innerHTML = `<div class="empty-state">No artworks match your search.</div>`;
+                return;
+            }
+
+            artworksToDisplay.forEach(art => {
+                const card = document.createElement('div');
+                card.className = 'art-card';
+                
+                const imageHtml = art.imageUrl 
+                    ? `<img src="${art.imageUrl}" alt="${art.title}" style="width: 100%; height: 250px; object-fit: cover; border-radius: 2px; margin-bottom: 15px;">`
+                    : `<div class="image-placeholder">Image Pending</div>`;
+
+                card.innerHTML = `
+                    ${imageHtml}
+                    <h3>${art.title}</h3>
+                    <p>${art.artist}</p>
+                    <p><i>${art.medium}</i></p>
+                    <div class="price-row">
+                        <span class="price">$${art.price.toLocaleString()}</span>
+                        <button class="buy-btn" onclick="buyArtwork(${art.id})">Buy Now</button>
+                    </div>
+                `;
+                gallery.appendChild(card);
+            });
+        }
+
+        // The Filtering Engine
+        function filterGallery() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const selectedMedium = document.getElementById('mediumFilter').value;
+
+            const filteredArt = allArtworks.filter(art => {
+                // Check if the title or artist includes the typed letters
+                const matchesSearch = art.title.toLowerCase().includes(searchTerm) || art.artist.toLowerCase().includes(searchTerm);
+                // Check if the dropdown matches the painting's medium
+                const matchesMedium = selectedMedium === 'all' || art.medium === selectedMedium;
+                
+                return matchesSearch && matchesMedium;
+            });
+
+            renderGallery(filteredArt);
+        }
+
+        // Event listeners to trigger the filter function instantly when typing or selecting
+        document.getElementById('searchInput').addEventListener('input', filterGallery);
+        document.getElementById('mediumFilter').addEventListener('change', filterGallery);
+
+        // Checkout Function (Unchanged)
+        async function buyArtwork(id) {
+            if (!confirm('Are you sure you want to purchase this piece?')) return;
+
+            try {
+                const response = await fetch(`/api/checkout/${id}`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(`Success! \nSubtotal: $${result.receipt.subtotal}\nVAT (15%): $${result.receipt.vat}\nTotal Paid: $${result.receipt.totalPaid}`);
+                    loadGallery(); 
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Checkout failed:', error);
+            }
+        }
+        
+        // Start the engine
+        loadGallery();
+    </script>
+</body>
+</html>

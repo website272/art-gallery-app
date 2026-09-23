@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gallery Admin Dashboard</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 40px; }
+        .admin-container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        h1, h2 { text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background-color: #000; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button:hover { background-color: #333; }
+        
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+        .metric-card { background: #f9f9f9; padding: 20px; text-align: center; border-radius: 4px; border: 1px solid #eee; }
+        .metric-card h4 { margin: 0 0 10px 0; color: #666; font-size: 0.9rem; }
+        .metric-card p { margin: 0; font-size: 1.5rem; font-weight: bold; color: #000; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f4f7f6; }
+        
+        /* New Delete Button Style */
+        .btn-delete { background-color: #dc3545; padding: 5px 10px; font-size: 0.9rem; margin: 0; width: auto; }
+        .btn-delete:hover { background-color: #c82333; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h1>Add New Artwork</h1>
+        <form id="addArtForm">
+            <div class="form-group"><label>Artwork Image</label><input type="file" id="image" accept="image/*" required></div>
+            <div class="form-group"><label>Artwork Title</label><input type="text" id="title" required></div>
+            <div class="form-group"><label>Artist Name</label><input type="text" id="artist" required></div>
+            <div class="form-group"><label>Medium</label><input type="text" id="medium"></div>
+            <div class="form-group"><label>Listing Price ($)</label><input type="number" id="price" required></div>
+            <div class="form-group"><label>Cost to Gallery ($)</label><input type="number" id="costToGallery" required></div>
+            <button type="submit">Upload to Gallery</button>
+        </form>
+    </div>
+
+    <!-- Active Inventory Section -->
+    <div class="admin-container">
+        <h2>Active Inventory Manager</h2>
+        <table>
+            <thead><tr><th>ID</th><th>Title</th><th>Price</th><th>Action</th></tr></thead>
+            <tbody id="inventoryTable"></tbody>
+        </table>
+    </div>
+
+    <!-- Financial Ledger Section -->
+    <div class="admin-container">
+        <h2>Financial Ledger (Sold)</h2>
+        <div class="metrics-grid">
+            <div class="metric-card"><h4>Total Revenue</h4><p id="totalRevenue">$0</p></div>
+            <div class="metric-card"><h4>Cost of Goods</h4><p id="totalCosts">$0</p></div>
+            <div class="metric-card"><h4>Gross Profit</h4><p id="grossProfit">$0</p></div>
+            <div class="metric-card"><h4>VAT Liability (15%)</h4><p id="vatLiability">$0</p></div>
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>Title</th><th>Price</th><th>Margin</th></tr></thead>
+            <tbody id="ledgerTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Upload logic
+        document.getElementById('addArtForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('image', document.getElementById('image').files[0]);
+            formData.append('title', document.getElementById('title').value);
+            formData.append('artist', document.getElementById('artist').value);
+            formData.append('medium', document.getElementById('medium').value);
+            formData.append('price', document.getElementById('price').value);
+            formData.append('costToGallery', document.getElementById('costToGallery').value);
+
+            const response = await fetch('/api/artworks', { method: 'POST', body: formData });
+            if (response.ok) {
+                alert('Artwork uploaded successfully!');
+                document.getElementById('addArtForm').reset();
+                loadDashboardData(); // Refresh the tables instantly
+            }
+        });
+
+        // The new Delete Logic
+        async function deleteArtwork(id) {
+            if (!confirm('Are you sure you want to permanently delete this artwork?')) return;
+            
+            const response = await fetch(`/api/artworks/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                loadDashboardData(); // Refresh the table so it vanishes
+            } else {
+                alert('Error deleting artwork.');
+            }
+        }
+
+        // Fetch Data for both tables
+        async function loadDashboardData() {
+            // Load Active Inventory
+            const invResponse = await fetch('/api/artworks');
+            const invData = await invResponse.json();
+            const invTable = document.getElementById('inventoryTable');
+            invTable.innerHTML = '';
+            invData.forEach(art => {
+                invTable.innerHTML += `
+                    <tr>
+                        <td>#${art.id}</td>
+                        <td>${art.title}</td>
+                        <td>$${art.price.toLocaleString()}</td>
+                        <td><button class="btn-delete" onclick="deleteArtwork(${art.id})">Delete</button></td>
+                    </tr>`;
+            });
+
+            // Load Financials
+            const finResponse = await fetch('/api/financials');
+            const finData = await finResponse.json();
+            
+            document.getElementById('totalRevenue').textContent = `$${finData.summary.revenue.toLocaleString()}`;
+            document.getElementById('totalCosts').textContent = `$${finData.summary.costOfGoods.toLocaleString()}`;
+            document.getElementById('grossProfit').textContent = `$${finData.summary.grossProfit.toLocaleString()}`;
+            document.getElementById('vatLiability').textContent = `$${finData.summary.vatLiability.toLocaleString()}`;
+
+            const finTable = document.getElementById('ledgerTable');
+            finTable.innerHTML = '';
+            finData.sales.forEach(sale => {
+                finTable.innerHTML += `
+                    <tr>
+                        <td>#${sale.id}</td>
+                        <td>${sale.title}</td>
+                        <td>$${sale.price.toLocaleString()}</td>
+                        <td style="color: green; font-weight: bold;">+$${(sale.price - sale.costToGallery).toLocaleString()}</td>
+                    </tr>`;
+            });
+        }
+
+        // Run on load
+        loadDashboardData();
+    </script>
+</body>
+</html>
