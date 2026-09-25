@@ -72,7 +72,21 @@ const sequelize = process.env.DATABASE_URL
         host: 'localhost',
         logging: false
       });
+// --- NEW: USER DATABASE MODEL ---
+const User = sequelize.define('User', {
+    name: { type: DataTypes.STRING, allowNull: false },
+    email: { type: DataTypes.STRING, allowNull: false, unique: true },
+    password: { type: DataTypes.STRING, allowNull: false },
+    phone: { type: DataTypes.STRING },
+    address: { type: DataTypes.TEXT },
+    role: { type: DataTypes.STRING, defaultValue: 'customer' } // 'customer' or 'admin'
+});
 
+// Create relationships (A User can have many Orders/Cart items later)
+// Make sure PostgreSQL builds the new table
+sequelize.sync({ alter: true })
+    .then(() => console.log('PostgreSQL database connected and synced!'))
+    .catch(err => console.error('Database connection error:', err));
 const Artwork = sequelize.define('Artwork', {
     title: { type: DataTypes.STRING, allowNull: false },
     artist: { type: DataTypes.STRING, allowNull: false },
@@ -107,6 +121,57 @@ app.post('/api/artworks', adminAuth, upload.single('image'), async (req, res) =>
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
+    const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = 'super_secret_gallery_key_2026'; // In production, this goes in your .env file
+
+// REGISTER NEW CUSTOMER
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, phone } = req.body;
+        
+        // 1. Check if email already exists
+        const existingUser = await User.findOne({ where: { email } });
+        if (existingUser) return res.status(400).json({ error: 'Email already in use' });
+
+        // 2. Encrypt the password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // 3. Save user to database
+        const newUser = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            phone
+        });
+
+        res.status(201).json({ message: 'Account created successfully!' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// CUSTOMER LOGIN
+app.post('/api/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // 1. Find user by email
+        const user = await User.findOne({ where: { email } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // 2. Check password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) return res.status(401).json({ error: 'Invalid password' });
+
+        // 3. Generate VIP Pass (JWT)
+        const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(200).json({ message: 'Login successful', token, name: user.name });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 });
 
 // 2. View Gallery (Public)
