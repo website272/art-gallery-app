@@ -7,7 +7,9 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
-const PORT = 3000;
+
+// UPGRADED FOR RENDER: Render requires a dynamic port
+const PORT = process.env.PORT || 3000;
 
 // --- CLOUDINARY CONFIG ---
 // Replace these with your actual credentials from your Cloudinary API Keys page
@@ -47,9 +49,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- EXPLICIT HTML ROUTES ---
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/admin.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-// NEW ROUTES ADDED HERE:
 app.get('/about.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'about.html')));
 app.get('/more.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'more.html')));
+// THE MISSING CART ROUTE IS ADDED HERE:
+app.get('/cart.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'cart.html')));
 
 // --- DATABASE SETUP (PostgreSQL Production Upgrade) ---
 const sequelize = process.env.DATABASE_URL 
@@ -176,4 +179,4 @@ app.delete('/api/artworks/:id', async (req, res) => {
 });
 
 // --- START SERVER ---
-app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
