@@ -11,6 +11,7 @@
         .navbar { background-color: #222; padding: 15px 0; text-align: center; margin-bottom: 30px; }
         .navbar a { color: white; text-decoration: none; font-weight: bold; margin: 0 20px; font-size: 18px; transition: color 0.3s; }
         .navbar a:hover { color: #00bcd4; }
+        #cartLink { color: #00bcd4; border: 1px solid #00bcd4; padding: 5px 15px; border-radius: 20px; }
 
         h1 { text-align: center; margin-bottom: 40px; letter-spacing: 2px; text-transform: uppercase; }
         
@@ -38,16 +39,16 @@
         <a href="/">Home Page</a>
         <a href="/about.html">About Us</a>
         <a href="/more.html">More</a>
+        <a href="/cart.html" id="cartLink">Cart (0)</a>
     </nav>
 
     <h1>Featured Collections</h1>
     
-    <!-- Controls with New Price Filter -->
+    <!-- Controls with Price Filter -->
     <div class="controls">
         <input type="text" id="searchInput" class="search-bar" placeholder="Search by artwork title or artist name...">
         <select id="mediumFilter" class="filter-dropdown">
             <option value="all">All Mediums</option>
-            <!-- Javascript will inject the available mediums here automatically -->
         </select>
         <input type="number" id="maxPriceFilter" class="search-bar" placeholder="Max price ($)" min="0" style="max-width: 150px;">
     </div>
@@ -55,22 +56,44 @@
     <div class="gallery" id="gallery"></div>
 
     <script>
-        // We store the full inventory globally so we can filter it without re-fetching from the server
         let allArtworks = [];
+        
+        // --- NEW SHOPPING CART LOGIC ---
+        // Load existing cart from browser memory or start empty
+        let cart = JSON.parse(localStorage.getItem('gallery_cart')) || [];
+
+        function updateCartCount() {
+            document.getElementById('cartLink').innerText = `Cart (${cart.length})`;
+        }
+
+        function addToCart(id, title, price, imageUrl) {
+            // Prevent buying the same unique painting twice
+            const exists = cart.find(item => item.id === id);
+            if (exists) {
+                alert(`"${title}" is already in your cart!`);
+                return;
+            }
+
+            // Add to cart array and save to browser storage
+            cart.push({ id, title, price, imageUrl });
+            localStorage.setItem('gallery_cart', JSON.stringify(cart));
+            
+            updateCartCount();
+            alert(`Added "${title}" to your cart!`);
+        }
 
         async function loadGallery() {
             try {
                 const response = await fetch('/api/artworks');
                 allArtworks = await response.json();
-                
                 populateFilters(allArtworks);
                 renderGallery(allArtworks);
+                updateCartCount(); // Update the counter when page loads
             } catch (error) {
                 console.error("Error loading artwork:", error);
             }
         }
 
-        // Extracts all unique mediums from your database and builds the dropdown options
         function populateFilters(artworks) {
             const dropdown = document.getElementById('mediumFilter');
             const uniqueMediums = [...new Set(artworks.map(art => art.medium).filter(Boolean))];
@@ -81,7 +104,6 @@
             });
         }
 
-        // Handles displaying the artwork cards
         function renderGallery(artworksToDisplay) {
             const gallery = document.getElementById('gallery');
             gallery.innerHTML = ''; 
@@ -95,10 +117,12 @@
                 const card = document.createElement('div');
                 card.className = 'art-card';
                 
+                const safeImageUrl = art.imageUrl ? art.imageUrl : '';
                 const imageHtml = art.imageUrl 
                     ? `<img src="${art.imageUrl}" alt="${art.title}" style="width: 100%; height: 250px; object-fit: cover; border-radius: 2px; margin-bottom: 15px;">`
                     : `<div class="image-placeholder">Image Pending</div>`;
 
+                // Notice the button now calls addToCart instead of buyArtwork
                 card.innerHTML = `
                     ${imageHtml}
                     <h3>${art.title}</h3>
@@ -106,63 +130,35 @@
                     <p><i>${art.medium}</i></p>
                     <div class="price-row">
                         <span class="price">$${art.price.toLocaleString()}</span>
-                        <button class="buy-btn" onclick="buyArtwork(${art.id})">Buy Now</button>
+                        <button class="buy-btn" onclick="addToCart(${art.id}, '${art.title.replace(/'/g, "\\'")}', ${art.price}, '${safeImageUrl}')">Add to Cart</button>
                     </div>
                 `;
                 gallery.appendChild(card);
             });
         }
 
-        // The Bulletproof Filtering Engine (Search + Medium + Price)
         function filterGallery() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const selectedMedium = document.getElementById('mediumFilter').value;
             const maxPriceInput = document.getElementById('maxPriceFilter').value;
 
             const filteredArt = allArtworks.filter(art => {
-                // 1. Search Check
                 const safeTitle = (art.title || '').toLowerCase();
                 const safeArtist = (art.artist || '').toLowerCase();
                 const matchesSearch = safeTitle.includes(searchTerm) || safeArtist.includes(searchTerm);
-                
-                // 2. Medium Check
                 const matchesMedium = selectedMedium === 'all' || art.medium === selectedMedium;
-                
-                // 3. Price Check (If box is empty, show all. If typed, only show items under max price)
                 const matchesPrice = maxPriceInput === '' || art.price <= Number(maxPriceInput);
                 
-                // Item must pass all three tests to show up on the screen
                 return matchesSearch && matchesMedium && matchesPrice;
             });
 
             renderGallery(filteredArt);
         }
 
-        // Event listeners to trigger the filter function instantly
         document.getElementById('searchInput').addEventListener('input', filterGallery);
         document.getElementById('mediumFilter').addEventListener('change', filterGallery);
         document.getElementById('maxPriceFilter').addEventListener('input', filterGallery);
 
-        // Checkout Function
-        async function buyArtwork(id) {
-            if (!confirm('Are you sure you want to purchase this piece?')) return;
-
-            try {
-                const response = await fetch(`/api/checkout/${id}`, { method: 'POST' });
-                const result = await response.json();
-
-                if (response.ok) {
-                    alert(`Success! \nSubtotal: $${result.receipt.subtotal}\nVAT (15%): $${result.receipt.vat}\nTotal Paid: $${result.receipt.totalPaid}`);
-                    loadGallery(); 
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                console.error('Checkout failed:', error);
-            }
-        }
-        
-        // Start the engine
         loadGallery();
     </script>
 </body>
