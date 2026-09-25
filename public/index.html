@@ -33,7 +33,7 @@
     </style>
 </head>
 <body>
-    <!-- New Navigation Bar -->
+    <!-- Navigation Bar -->
     <nav class="navbar">
         <a href="/">Home Page</a>
         <a href="/about.html">About Us</a>
@@ -42,12 +42,14 @@
 
     <h1>Featured Collections</h1>
     
+    <!-- Controls with New Price Filter -->
     <div class="controls">
         <input type="text" id="searchInput" class="search-bar" placeholder="Search by artwork title or artist name...">
         <select id="mediumFilter" class="filter-dropdown">
             <option value="all">All Mediums</option>
             <!-- Javascript will inject the available mediums here automatically -->
         </select>
+        <input type="number" id="maxPriceFilter" class="search-bar" placeholder="Max price ($)" min="0" style="max-width: 150px;">
     </div>
 
     <div class="gallery" id="gallery"></div>
@@ -111,26 +113,35 @@
             });
         }
 
-        // The Filtering Engine
+        // The Bulletproof Filtering Engine (Search + Medium + Price)
         function filterGallery() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const selectedMedium = document.getElementById('mediumFilter').value;
+            const maxPriceInput = document.getElementById('maxPriceFilter').value;
 
             const filteredArt = allArtworks.filter(art => {
-                // Check if the title or artist includes the typed letters
-                const matchesSearch = art.title.toLowerCase().includes(searchTerm) || art.artist.toLowerCase().includes(searchTerm);
-                // Check if the dropdown matches the painting's medium
+                // 1. Search Check
+                const safeTitle = (art.title || '').toLowerCase();
+                const safeArtist = (art.artist || '').toLowerCase();
+                const matchesSearch = safeTitle.includes(searchTerm) || safeArtist.includes(searchTerm);
+                
+                // 2. Medium Check
                 const matchesMedium = selectedMedium === 'all' || art.medium === selectedMedium;
                 
-                return matchesSearch && matchesMedium;
+                // 3. Price Check (If box is empty, show all. If typed, only show items under max price)
+                const matchesPrice = maxPriceInput === '' || art.price <= Number(maxPriceInput);
+                
+                // Item must pass all three tests to show up on the screen
+                return matchesSearch && matchesMedium && matchesPrice;
             });
 
             renderGallery(filteredArt);
         }
 
-        // Event listeners to trigger the filter function instantly when typing or selecting
+        // Event listeners to trigger the filter function instantly
         document.getElementById('searchInput').addEventListener('input', filterGallery);
         document.getElementById('mediumFilter').addEventListener('change', filterGallery);
+        document.getElementById('maxPriceFilter').addEventListener('input', filterGallery);
 
         // Checkout Function
         async function buyArtwork(id) {
