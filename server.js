@@ -84,10 +84,18 @@ const User = sequelize.define('User', {
 
 // Create relationships (A User can have many Orders/Cart items later)
 // Make sure PostgreSQL builds the new table
-sequelize.sync({ alter: true })
-    .then(() => console.log('PostgreSQL database connected and synced!'))
-    .catch(err => console.error('Database connection error:', err));
-const Artwork = sequelize.define('Artwork', {
+// --- CRASH-PROOF DATABASE SYNC ---
+async function startDatabase() {
+    try {
+        // Sync tables one by one to prevent PostgreSQL traffic jams
+        await Artwork.sync();
+        await User.sync();
+        console.log('PostgreSQL database connected and synced!');
+    } catch (err) {
+        console.log('PostgreSQL sync warning (Ignored to keep server running):', err.message);
+    }
+}
+startDatabase();
     title: { type: DataTypes.STRING, allowNull: false },
     artist: { type: DataTypes.STRING, allowNull: false },
     medium: { type: DataTypes.STRING },
